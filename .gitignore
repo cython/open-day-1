@@ -1,0 +1,5 @@
+/einsteinboltzmann/.waf-*
+/einsteinboltzmann/build
+/einsteinboltzmann/.lock*
+*.pyc
+*~
