@@ -36,7 +36,7 @@ def configure(conf):
 def build(bld):
     bld.recurse('gsl')
     
-    for x in 'time_mod rec_mod evolution_mod'.split():
+    for x in 'time_mod rec_mod'.split():
         bld(target=x, source='%s.pyx' % x,
             features='c fc pyext cshlib',
             use='NUMPY'

@@ -4,20 +4,14 @@ from __future__ import division
 # evolution_mod -- AST5220 Milestone 3
 #
 
-cdef double Omega_b, Omega_m, Omega_r, Omega_lambda
-cdef double H_0, c, nan, pi
-
-cimport numpy as np
 from params import c, H_0, Omega_b, Omega_r, Omega_m
 from time_mod import x_start_rec, get_eta, get_H, get_H_p, get_dH_p
-from time_mod cimport get_H_p_fast, get_H_fast, get_eta_fast
 from rec_mod import get_dtau, get_ddtau
-from rec_mod cimport get_dtau_fast, get_ddtau_fast
 import numpy as np
 from scipy.integrate import ode
 
 from numpy import inf, arange, array, abs, nan, pi
-from libc.math cimport exp, log, sqrt
+from numpy import exp, log, sqrt
 np.seterr(all='raise') # fail hard on NaN and over/underflow
 
 #
@@ -50,27 +44,17 @@ def get_tight_coupling_switch(x_grid, k):
 # ODE system
 #
 
-cdef enum:
-    # Declare indices into the y and dy arrays
-    # Arrays are 0-based in Python. This is only used in the
-    # ODE solver and not exposed to other modules.
-    i_delta = 0
-    i_delta_b = 1
-    i_v = 2
-    i_v_b = 3
-    i_Phi = 4
-    i_Theta = 5
-    i_Theta0 = 5
-    i_Theta1 = 6
-    i_Theta2 = 7
+i_delta = 0
+i_delta_b = 1
+i_v = 2
+i_v_b = 3
+i_Phi = 4
+i_Theta = 5
+i_Theta0 = 5
+i_Theta1 = 6
+i_Theta2 = 7
 
-cdef inline double square(double x):
-    return x*x
-
-cdef inline double cube(double x):
-    return x*x*x
-
-cdef class EinsteinBoltzmannEquations:
+class EinsteinBoltzmannEquations:
     """
     Evaluates the Einstein-Boltzmann equations for given k, lmax,
     both in tight coupling regime and using full equation set.
@@ -82,11 +66,6 @@ cdef class EinsteinBoltzmannEquations:
     evaluated is available through f_count and jacobian_count
     (and is the reason for making this a class).
     """    
-    cdef np.ndarray dy, jacobian_array
-    cdef bint tight_coupling
-    cdef double k
-    cdef int _lmax
-    cdef public int f_count, jacobian_count
 
     def __init__(self, tight_coupling, k, lmax):
         if tight_coupling:
@@ -100,29 +79,26 @@ cdef class EinsteinBoltzmannEquations:
         self._lmax = lmax
         self.f_count = self.jacobian_count = 0
 
-    def f(self, double x, np.ndarray[double, mode='c'] y):
+    def f(self, x, y):
         """
         Evaluate the derivative vector/right hand side of the E-B ODE.
         """
-        cdef np.ndarray[double, mode='c'] dy = self.dy
-        cdef double k = self.k
-        cdef bint tight_coupling = self.tight_coupling
-        cdef int lmax = self._lmax, l
-        cdef double a, H, H_p, dtau, ddtau, R, delta, delta_b, v, v_b, Phi, \
-                    Theta0, Theta1, Theta2, Psi, dPhi, dTheta0, dv_b, eta, \
-                    q
+        dy = self.dy
+        k = self.k
+        tight_coupling = self.tight_coupling
+        lmax = self._lmax
 
         self.f_count += 1
         
         # Fetch time-dependant variables
         a = exp(x)
-        H = get_H_fast(x)
+        H = get_H(x)
         H_p = a * H
-        dtau = get_dtau_fast(x)
-        ddtau = get_ddtau_fast(x)
+        dtau = get_dtau(x)
+        ddtau = get_ddtau(x)
         R = 4 / 3 * Omega_r / Omega_b / a
         if not tight_coupling:
-            eta = get_eta_fast(x)
+            eta = get_eta(x)
 
         # Parse the y array
         delta = y[i_delta]
@@ -138,13 +114,13 @@ cdef class EinsteinBoltzmannEquations:
             Theta2 = y[i_Theta2]
         
         # Evaluate components        
-        Psi = -Phi - 12 * square(H_0) / square(c) / square(k) / square(a) * Omega_r * Theta2
+        Psi = -Phi - 12 * H_0**2 / c**2 / k**2 / a**2 * Omega_r * Theta2
         dy[i_Phi] = dPhi = (Psi
-                              - square(c * k / H_p) * Phi / 3
-                              + square(H_0) / square(H_p) / 2
+                              - (c * k / H_p)**2 * Phi / 3
+                              + H_0**2 / H_p**2 / 2
                               * (Omega_m / a * delta
                                  + Omega_b / a * delta_b
-                                 + 4 * Omega_r / square(a) * Theta0))
+                                 + 4 * Omega_r / a**2 * Theta0))
         dy[i_Theta0] = dTheta0 = -(c * k / H_p) * y[i_Theta + 1] - dPhi
 
         if tight_coupling:
@@ -178,13 +154,13 @@ cdef class EinsteinBoltzmannEquations:
                                     + dtau * y[i_Theta + lmax])
         return dy
 
-    def jacobian(self, double x, np.ndarray[double, mode='c'] y):
+    def jacobian(self, x, y):
         """
         Evaluate the Jacobian of the E-B ODE.
         """
-        cdef np.ndarray[double, ndim=2, mode='c'] jac = self.jacobian_array
-        cdef double k = self.k, tmp
-        cdef int lmax = self._lmax, l, i, n
+        jac = self.jacobian_array
+        k = self.k
+        lmax = self._lmax
 
         self.jacobian_count += 1
 
@@ -194,27 +170,27 @@ cdef class EinsteinBoltzmannEquations:
         
         # Fetch time-dependant variables
         a = exp(x)
-        H = get_H_fast(x)
+        H = get_H(x)
         H_p = a * H
-        dtau = get_dtau_fast(x)
-        ddtau = get_ddtau_fast(x)
+        dtau = get_dtau(x)
+        ddtau = get_ddtau(x)
         R = 4 / 3 * Omega_r / Omega_b / a
-        eta = get_eta_fast(x)
+        eta = get_eta(x)
 
         # Evaluate Jacobian and store it in
         # jac[derivative_of_param, with_respect_to_param]
         # The zero elements will always stay zero from the first initialization in
         # __init__.
 
-        cdef double partial_dPsi_Phi = -1
-        cdef double partial_dPsi_Theta2 = -12*square(H_0 / c / k / a) * Omega_r
+        partial_dPsi_Phi = -1
+        partial_dPsi_Theta2 = -12*(H_0 / c / k / a)**2 * Omega_r
 
-        jac[i_Phi, i_Phi] = -1 - square(c*k/H_p) / 3
-        tmp = square(H_0/H_p) / 2
+        jac[i_Phi, i_Phi] = -1 - (c*k/H_p)**2 / 3
+        tmp = (H_0/H_p)**2 / 2
         jac[i_Phi, i_delta] = tmp * Omega_m / a
         jac[i_Phi, i_delta_b] = tmp * Omega_b / a
-        jac[i_Phi, i_Theta0] = tmp * 4 * Omega_r / square(a)
-        jac[i_Phi, i_Theta0] = square(H_0/H_p) * 2 * Omega_r / square(a)
+        jac[i_Phi, i_Theta0] = tmp * 4 * Omega_r / a**2
+        jac[i_Phi, i_Theta0] = (H_0/H_p)**2 * 2 * Omega_r / a**2
         jac[i_Phi, i_Theta2] = partial_dPsi_Theta2
 
         # delta, delta_b
@@ -254,7 +230,7 @@ cdef class EinsteinBoltzmannEquations:
 
         return jac
         
-def solve_einstein_boltzmann(np.ndarray[double] x_grid,
+def solve_einstein_boltzmann(x_grid,
                              k, rtol=1e-15,
                              nsteps=10**10, max_step=None,
                              min_step=None,
@@ -273,7 +249,6 @@ def solve_einstein_boltzmann(np.ndarray[double] x_grid,
     number of times the rhs and the Jacobian were evaluated.
 
     """
-    cdef int i
     i_Psi = i_Theta + lmax + 1
     
     assert np.isscalar(k)

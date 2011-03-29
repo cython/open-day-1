@@ -6,10 +6,13 @@ import os
 import cPickle as pickle
 import numpy as np
 
-from evolution_mod import compute_einstein_boltzmann_grid
+from evolution_mod import compute_einstein_boltzmann_grid, k_min, k_max
 
-#7.56e-24
-k = 7.56e-24
+# k_min = 7.56e-28
+# k_max = 7.56e-24
+
+k = 7.56e-25
+
 with print_time_taken('Solving...'):
     sol = compute_einstein_boltzmann_grid(n_x=1000, k_grid=np.array([k]))
 
@@ -26,27 +29,27 @@ ax = axsiter.next()
 ax.semilogy(x_grid, abs(sol.delta[idx_k,:]), ':k', label=r'$|\delta|$')
 ax.semilogy(x_grid, abs(sol.delta_b[idx_k,:]), '-k', label=r'$|\delta_b|$')
 ax.set_ylim(1e-3, 1e5)
-ax.legend()
+ax.legend(loc='upper left')
 
 # v plot
 ax = axsiter.next()
 ax.semilogy(x_grid, abs(sol.v[idx_k,:]), ':k', label=r'$|v|$')
 ax.semilogy(x_grid, abs(sol.v[idx_k,:]), '-k', label=r'$|v_b|$')
 ax.set_ylim(1e-4, 1e2)
-ax.legend()
+ax.legend(loc='upper left')
 
 # Phi, Psi plot
 ax = axsiter.next()
 ax.plot(x_grid, sol.Phi[idx_k,:], ':k', label=r'$\Phi$')
 ax.plot(x_grid, -sol.Psi[idx_k,:], '-k', label=r'$-\Psi$')
 ax.set_ylim(-.05, 1.05)
-ax.legend(loc='upper right')
+ax.legend(loc='lower left')
 
 # Theta plot
 ax = axsiter.next()
 ax.semilogy(x_grid, abs(sol.Theta[0, idx_k, :]), ':k', label=r'$|\Theta_0|$')
 ax.semilogy(x_grid, abs(sol.Theta[1, idx_k, :]), '-k', label=r'$|\Theta_1|$')
-ax.legend(loc='upper right')
+ax.legend(loc='lower left')
 ax.set_ylim(1e-4, 10)
 
 plt.show()
