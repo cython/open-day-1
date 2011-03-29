@@ -1,0 +1,162 @@
+{{{id=4|
+import Image
+import numpy as np
+from matplotlib import pyplot as plt
+import scipy.stats
+import scipy.signal
+from functools import partial
+
+_plotidx = 0
+def plotimg(x, bar=False):
+    global _plotidx
+    fig = plt.figure()
+    ax = fig.add_subplot(1,1,1)
+    i = ax.imshow(x, interpolation='nearest', cmap=plt.cm.gray)
+    if bar:
+        fig.colorbar(i)
+    fig.set_size_inches(15, 5)
+    _plotidx += 1
+    plt.savefig('out%d.png' % _plotidx, dpi=60, )
+///
+}}}
+
+{{{id=1|
+img = np.asarray(Image.open('/home/dagss/flower.jpg'))
+img = img.astype(np.float32) / 256
+img = img[400:450, 400:450]
+plotimg(img[:, :, :])
+///
+}}}
+
+{{{id=2|
+def get_gaussian_kernel(ksize=20):
+    x, y = np.ogrid[-ksize:ksize + 1, -ksize:ksize + 1]
+    kernel = scipy.stats.norm.pdf(np.sqrt(x**2 + y**2), scale=ksize / 2.7)
+    kernel /= np.sum(kernel)
+    return kernel.astype(np.float32)
+    
+plotimg(get_gaussian_kernel(10), bar=True)
+///
+}}}
+
+{{{id=8|
+def color_convolve(convolve_func, kernel, img):
+    smoothed_img = np.zeros((img.shape[0] + kernel.shape[0] - 1, img.shape[1] + kernel.shape[1] - 1, 3), np.float32)
+    for cidx in range(3):
+        smoothed_img[:, :, cidx] = convolve_func(kernel, img[:, :, cidx])
+    return smoothed_img
+///
+}}}
+
+{{{id=3|
+ksize = 5
+kernel = get_gaussian_kernel(ksize)
+plotimg(img)
+time smt = color_convolve(scipy.signal.convolve2d, kernel, img)
+plotimg(smt)
+///
+}}}
+
+{{{id=7|
+def py_convolve2d(g, f):
+    # f is an image and is indexed by (v, w)
+    # g is a filter kernel and is indexed by (s, t),
+    #   it needs odd dimensions
+    # h is the output image and is indexed by (x, y),
+    #   it is not cropped
+    if g.shape[0] % 2 != 1 or g.shape[1] % 2 != 1:
+        raise ValueError("Only odd dimensions on filter supported")
+    # smid and tmid are number of pixels between the center pixel
+    # and the edge, ie for a 5x5 filter they will be 2.
+    #
+    # The output size is calculated by adding smid, tmid to each
+    # side of the dimensions of the input image.
+    vmax = f.shape[0]
+    wmax = f.shape[1]
+    smax = g.shape[0]
+    tmax = g.shape[1]
+    smid = smax // 2
+    tmid = tmax // 2
+    xmax = vmax + 2*smid
+    ymax = wmax + 2*tmid
+    # Allocate result image.
+    h = np.zeros([xmax, ymax], dtype=f.dtype)
+    # Do convolution
+    for x in range(xmax):
+        for y in range(ymax):
+            # Calculate pixel value for h at (x,y). Sum one component
+            # for each pixel (s, t) of the filter g.
+            s_from = max(smid - x, -smid)
+            s_to = min((xmax - x) - smid, smid + 1)
+            t_from = max(tmid - y, -tmid)
+            t_to = min((ymax - y) - tmid, tmid + 1)
+            value = 0
+            for s in range(s_from, s_to):
+                for t in range(t_from, t_to):
+                    v = x - smid + s
+                    w = y - tmid + t
+                    value += g[smid - s, tmid - t] * f[v, w]
+            h[x, y] = value
+    return h
+///
+}}}
+
+{{{id=9|
+time smt = color_convolve(py_convolve2d, get_gaussian_kernel(2), img)
+plotimg(smt)
+///
+}}}
+
+{{{id=10|
+%cython
+import numpy as np
+cimport numpy as np
+cimport cython
+
+def cy_convolve2d(np.ndarray[np.float32_t, ndim=2] g, np.ndarray[np.float32_t, ndim=2] f):
+    cdef Py_ssize_t vmax, wmax, smax, tmax, smid, tmid, xmax, ymax, x, y, s, t, v, w, s_from, s_to, t_from, t_to
+    cdef np.ndarray[np.float32_t, ndim=2] h
+    cdef np.float64_t value
+
+    if g is None or f is None:
+        raise TypeError("f and g must not be None")
+    if g.shape[0] % 2 != 1 or g.shape[1] % 2 != 1:
+        raise ValueError("Only odd dimensions on filter supported")
+    vmax = f.shape[0]
+    wmax = f.shape[1]
+    smax = g.shape[0]
+    tmax = g.shape[1]
+    smid = smax // 2
+    tmid = tmax // 2
+    xmax = vmax + 2*smid
+    ymax = wmax + 2*tmid
+    h = np.zeros([xmax, ymax], dtype=np.float32)
+    for x in range(xmax):
+        for y in range(ymax):
+            s_from = max(smid - x, -smid)
+            s_to = min((xmax - x) - smid, smid + 1)
+            t_from = max(tmid - y, -tmid)
+            t_to = min((ymax - y) - tmid, tmid + 1)
+            value = 0
+            for s in range(s_from, s_to):
+                for t in range(t_from, t_to):
+                    v = x - smid + s
+                    w = y - tmid + t
+                    value += g[smid - s, tmid - t] * f[v, w]
+            h[x, y] = value
+    return h
+///
+}}}
+
+{{{id=11|
+ksize = 5
+timeit('smt = color_convolve(cy_convolve2d, get_gaussian_kernel(5), img)')
+time smt = color_convolve(py_convolve2d, get_gaussian_kernel(5), img)
+plotimg(smt)
+///
+}}}
+
+{{{id=12|
+
+///
+}}}
