@@ -33,8 +33,9 @@ def apply_inplace_install_path(self):
             # which can have multiple C suffixes
             package_node = None
             for x in self.source:
-                package_node = x.parent
-                break
+                if x.suffix() == '.pyx':
+                    package_node = x.parent
+                    break
             else:
                 raise AssertionError("Python extension does not have an associated .pyx file")
             self.install_path = package_node.get_src().abspath()

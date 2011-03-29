@@ -3,3 +3,6 @@
 /einsteinboltzmann/.lock*
 *.pyc
 *~
+*.so
+/einsteinboltzmann/*.c
+/einsteinboltzmann/gsl/*.c
