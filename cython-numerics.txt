@@ -4,61 +4,79 @@ import numpy as np
 from matplotlib import pyplot as plt
 import scipy.stats
 import scipy.signal
-from functools import partial
+import warnings
+
+warnings.simplefilter('ignore', np.ComplexWarning)
+warnings.simplefilter('ignore', DeprecationWarning)
+np.set_printoptions(precision=2)
 
 _plotidx = 0
-def plotimg(x, bar=False):
+def plot_images(images):
     global _plotidx
+    if not isinstance(images, list):
+        images = [images]
     fig = plt.figure()
-    ax = fig.add_subplot(1,1,1)
-    i = ax.imshow(x, interpolation='nearest', cmap=plt.cm.gray)
-    if bar:
-        fig.colorbar(i)
-    fig.set_size_inches(15, 5)
+    for idx, img in enumerate(images):
+        ax = fig.add_subplot(1, len(images), idx + 1)
+        i = ax.imshow(img, interpolation='nearest', cmap=plt.cm.gray)
+        if img.ndim == 2:
+            fig.colorbar(i)
+    fig.set_size_inches(15, 10)
     _plotidx += 1
     plt.savefig('out%d.png' % _plotidx, dpi=60, )
 ///
 }}}
 
 {{{id=1|
-img = np.asarray(Image.open('/home/dagss/flower.jpg'))
-img = img.astype(np.float32) / 256
-img = img[400:450, 400:450]
-plotimg(img[:, :, :])
+photo = np.asarray(Image.open('/home/dagss/munich.png'))
+photo = photo.astype(np.float32) / 256
+small_photo = photo[543:615, 290:365]
+plot_images([photo, small_photo])
+///
+}}}
+
+{{{id=16|
+ksize = 4
+x, y = np.mgrid[-ksize:ksize + 1, -ksize:ksize + 1]
+print x
+print y
+///
+}}}
+
+{{{id=17|
+np.sqrt(x**2 + y**2)
+///
+}}}
+
+{{{id=18|
+np.round(np.exp(-0.25*(x**2 + y**2)), 2)
 ///
 }}}
 
 {{{id=2|
-def get_gaussian_kernel(ksize=20):
-    x, y = np.ogrid[-ksize:ksize + 1, -ksize:ksize + 1]
-    kernel = scipy.stats.norm.pdf(np.sqrt(x**2 + y**2), scale=ksize / 2.7)
-    kernel /= np.sum(kernel)
-    return kernel.astype(np.float32)
-    
-plotimg(get_gaussian_kernel(10), bar=True)
+kernel = np.exp(-0.1*(x**2 + y**2)).astype(np.float32)
+kernel /= np.sum(kernel)    
+plot_images([small_photo, kernel])
 ///
 }}}
 
 {{{id=8|
-def color_convolve(convolve_func, kernel, img):
+def color_convolve(convolve_func, img, kernel):
     smoothed_img = np.zeros((img.shape[0] + kernel.shape[0] - 1, img.shape[1] + kernel.shape[1] - 1, 3), np.float32)
     for cidx in range(3):
-        smoothed_img[:, :, cidx] = convolve_func(kernel, img[:, :, cidx])
+        smoothed_img[:, :, cidx] = convolve_func(img[:, :, cidx], kernel)
     return smoothed_img
 ///
 }}}
 
 {{{id=3|
-ksize = 5
-kernel = get_gaussian_kernel(ksize)
-plotimg(img)
-time smt = color_convolve(scipy.signal.convolve2d, kernel, img)
-plotimg(smt)
+time smooth_photo = color_convolve(scipy.signal.convolve2d, photo, kernel)
+plot_images([photo, smooth_photo])
 ///
 }}}
 
 {{{id=7|
-def py_convolve2d(g, f):
+def py_convolve2d(f, g):
     # f is an image and is indexed by (v, w)
     # g is a filter kernel and is indexed by (s, t),
     #   it needs odd dimensions
@@ -102,8 +120,8 @@ def py_convolve2d(g, f):
 }}}
 
 {{{id=9|
-time smt = color_convolve(py_convolve2d, get_gaussian_kernel(2), img)
-plotimg(smt)
+time smoothed_small_photo = color_convolve(py_convolve2d, small_photo, kernel)
+plot_images([small_photo, smoothed_small_photo])
 ///
 }}}
 
@@ -113,7 +131,7 @@ import numpy as np
 cimport numpy as np
 cimport cython
 
-def cy_convolve2d(np.ndarray[np.float32_t, ndim=2] g, np.ndarray[np.float32_t, ndim=2] f):
+def cy_convolve2d(np.ndarray[np.float32_t, ndim=2] f, np.ndarray[np.float32_t, ndim=2] g):
     cdef Py_ssize_t vmax, wmax, smax, tmax, smid, tmid, xmax, ymax, x, y, s, t, v, w, s_from, s_to, t_from, t_to
     cdef np.ndarray[np.float32_t, ndim=2] h
     cdef np.float64_t value
@@ -149,14 +167,19 @@ def cy_convolve2d(np.ndarray[np.float32_t, ndim=2] g, np.ndarray[np.float32_t, n
 }}}
 
 {{{id=11|
-ksize = 5
-timeit('smt = color_convolve(cy_convolve2d, get_gaussian_kernel(5), img)')
-time smt = color_convolve(py_convolve2d, get_gaussian_kernel(5), img)
-plotimg(smt)
+time smoothed_small_photo = color_convolve(cy_convolve2d, small_photo, kernel)
+plot_images([small_photo, smoothed_small_photo])
 ///
 }}}
 
-{{{id=12|
+{{{id=19|
+time smoothed1 = color_convolve(scipy.signal.convolve2d, photo, kernel)
+time smoothed2 = color_convolve(cy_convolve2d, photo, kernel)
+plot_images([smoothed1, smoothed2, np.sum(smoothed1 - smoothed2, axis=2)])
+///
+}}}
+
+{{{id=21|
 
 ///
 }}}
